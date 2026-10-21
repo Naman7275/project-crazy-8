@@ -1,0 +1,23 @@
+{
+  "name": "nanosphere",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Cyberpunk 3D interactive portfolio",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d": "^0.14.0",
+    "camera-controls": "^2.9.0",
+    "howler": "^2.2.4",
+    "three": "^0.171.0"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0",
+    "vite-plugin-top-level-await": "^1.6.0",
+    "vite-plugin-wasm": "^3.6.0"
+  }
+}

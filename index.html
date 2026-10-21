@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Naman Raj — cyberpunk interactive portfolio" />
+  <title>NANOSPHERE</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/style/main.css" />
+</head>
+<body>
+  <div class="game"></div>
+
+  <!-- Loading screen -->
+  <div class="loading-screen" id="loading-screen">
+    <div class="loading-glitch" data-text="NANOSPHERE">NANOSPHERE</div>
+    <div class="loading-bar-container">
+      <div class="loading-bar" id="loading-bar"></div>
+    </div>
+    <div class="loading-text" id="loading-text">INITIALIZING NEURAL LINK...</div>
+  </div>
+
+  <!-- HUD overlay -->
+  <div class="hud" id="hud" style="display:none;">
+    <div class="hud-top">
+      <div class="hud-location" id="hud-location">ROOFTOP_01 // LANDING</div>
+    </div>
+    <div class="hud-bottom">
+      <div class="hud-controls">
+        <span class="key">WASD</span> MOVE
+        <span class="key">SHIFT</span> SPRINT
+        <span class="key">SPACE</span> JUMP
+        <span class="key">E</span> INTERACT
+      </div>
+    </div>
+  </div>
+
+  <!-- Interaction panel (slides in when near a zone) -->
+  <div class="panel" id="panel" style="display:none;">
+    <div class="panel-header" id="panel-header"></div>
+    <div class="panel-body" id="panel-body"></div>
+    <div class="panel-close" id="panel-close">ESC</div>
+  </div>
+
+  <script type="module" src="/src/index.js"></script>
+</body>
+</html>
