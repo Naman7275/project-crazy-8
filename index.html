@@ -16,17 +16,54 @@
   <!-- Loading screen -->
   <div class="loading-screen" id="loading-screen">
     <div class="loading-glitch" data-text="NANOSPHERE">NANOSPHERE</div>
+    <div class="loading-subtitle">INTERACTIVE PORTFOLIO SYSTEM</div>
     <div class="loading-bar-container">
       <div class="loading-bar" id="loading-bar"></div>
     </div>
     <div class="loading-text" id="loading-text">INITIALIZING NEURAL LINK...</div>
+    <div class="loading-boot-log" id="boot-log">
+      [SYS] booting render pipeline...<br>
+      [GPU] WebGL context acquired<br>
+      [PHX] loading Rapier3D WASM module
+    </div>
   </div>
 
+  <!-- Overlays -->
+  <div class="overlay-vignette"></div>
+  <div class="overlay-scanlines"></div>
+  <div class="overlay-noise"></div>
+  <div class="chromatic-flash" id="chromatic-flash"></div>
+  <div class="hud-scanline"></div>
+
+  <!-- Data stream (matrix-style rain) — populated by JS -->
+  <div class="data-stream" id="data-stream"></div>
+
   <!-- HUD overlay -->
-  <div class="hud" id="hud" style="display:none;">
+  <div class="hud" id="hud">
+    <div class="hud-corner tl"></div>
+    <div class="hud-corner tr"></div>
+    <div class="hud-corner bl"></div>
+    <div class="hud-corner br"></div>
+
     <div class="hud-top">
-      <div class="hud-location" id="hud-location">ROOFTOP_01 // LANDING</div>
+      <div class="hud-location" id="location-display">NIGHT CITY // ROAMING</div>
+      <div class="hud-status">
+        SYS <span class="val">ONLINE</span><br>
+        PHYS <span class="val">ACTIVE</span><br>
+        NET <span class="warn">LOCAL</span>
+      </div>
     </div>
+
+    <div class="hud-coords" id="hud-coords">
+      X: <span>0.00</span> &nbsp; Y: <span>0.00</span> &nbsp; Z: <span>0.00</span>
+    </div>
+
+    <div class="hud-fps" id="hud-fps">60 FPS</div>
+
+    <div class="hud-interact" id="interact-hint">
+      [ E ] INTERACT
+    </div>
+
     <div class="hud-bottom">
       <div class="hud-controls">
         <span class="key">WASD</span> MOVE
@@ -37,11 +74,12 @@
     </div>
   </div>
 
-  <!-- Interaction panel (slides in when near a zone) -->
-  <div class="panel" id="panel" style="display:none;">
-    <div class="panel-header" id="panel-header"></div>
-    <div class="panel-body" id="panel-body"></div>
-    <div class="panel-close" id="panel-close">ESC</div>
+  <!-- Interaction panel -->
+  <div class="panel" id="interaction-panel">
+    <div class="panel-close" id="panel-close">[ ESC ]</div>
+    <div class="panel-header" id="panel-title"></div>
+    <div class="panel-divider"></div>
+    <div class="panel-body" id="panel-content"></div>
   </div>
 
   <script type="module" src="/src/index.js"></script>
