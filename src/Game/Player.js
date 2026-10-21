@@ -7,18 +7,22 @@ export class Player {
     this.rapier = this.game.rapier
     this.scene = this.game.rendering.scene
 
-    this.position = { x: 0, y: 5, z: 0 }
+    this.position = { x: 0, y: 1, z: 0 }
     this.velocity = { x: 0, y: 0, z: 0 }
     this.rotation = 0
-    this.grounded = false
+    this.targetRotation = 0
+    this.grounded = true
+    this.lean = 0
 
-    this.speed = 8
+    this.speed = 12
     this.sprintMultiplier = 1.8
-    this.jumpForce = 8
-    this.gravity = -25
+    this.jumpForce = 10
+    this.time = 0
 
     this.setupPhysics()
-    this.setupVisual()
+    this.buildRider()
+    this.buildHoverBike()
+    this.setupTrails()
   }
 
   setupPhysics() {
@@ -26,76 +30,381 @@ export class Player {
     if (!world) return
 
     const bodyDesc = this.rapier.RigidBodyDesc.dynamic()
-      .setTranslation(0, 5, 0)
+      .setTranslation(0, 2, 0)
       .lockRotations()
     this.body = world.createRigidBody(bodyDesc)
 
-    const colliderDesc = this.rapier.ColliderDesc.capsule(0.5, 0.3)
-      .setFriction(0.5)
+    const colliderDesc = this.rapier.ColliderDesc.cuboid(0.8, 0.6, 1.2)
+      .setFriction(0.3)
       .setRestitution(0.0)
     this.collider = world.createCollider(colliderDesc, this.body)
   }
 
-  setupVisual() {
-    const group = new THREE.Group()
+  buildRider() {
+    this.rider = new THREE.Group()
 
-    const bodyGeo = new THREE.CapsuleGeometry(0.3, 1.0, 8, 16)
     const bodyMat = new THREE.MeshStandardMaterial({
       color: 0x1a1a2e,
-      metalness: 0.8,
+      metalness: 0.7,
       roughness: 0.3,
     })
-    const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat)
-    bodyMesh.position.y = 0.8
-    bodyMesh.castShadow = true
-    group.add(bodyMesh)
+    const jacketMat = new THREE.MeshStandardMaterial({
+      color: 0x0d0d1a,
+      metalness: 0.8,
+      roughness: 0.2,
+    })
 
-    const visorGeo = new THREE.BoxGeometry(0.5, 0.15, 0.35)
-    const visorMat = new THREE.MeshStandardMaterial({
+    // torso — jacket
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.8, 0.4), jacketMat)
+    torso.position.y = 1.8
+    torso.rotation.x = -0.15
+    torso.castShadow = true
+    this.rider.add(torso)
+
+    // jacket collar / high neck
+    const collar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.22, 0.3, 0.2, 8),
+      jacketMat
+    )
+    collar.position.set(0, 2.25, 0)
+    this.rider.add(collar)
+
+    // neon strips on jacket
+    const stripMat = new THREE.MeshBasicMaterial({ color: 0xff2a6d })
+    const stripGeo = new THREE.BoxGeometry(0.04, 0.6, 0.04)
+    for (const xOff of [-0.32, 0.32]) {
+      const strip = new THREE.Mesh(stripGeo, stripMat)
+      strip.position.set(xOff, 1.8, 0.21)
+      this.rider.add(strip)
+    }
+
+    // jacket back neon accent
+    const backStrip = new THREE.Mesh(
+      new THREE.BoxGeometry(0.5, 0.04, 0.04),
+      new THREE.MeshBasicMaterial({ color: 0x05d9e8 })
+    )
+    backStrip.position.set(0, 1.6, -0.21)
+    this.rider.add(backStrip)
+
+    // helmet
+    const helmetMat = new THREE.MeshStandardMaterial({
+      color: 0x111122,
+      metalness: 0.95,
+      roughness: 0.1,
+    })
+    const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 16), helmetMat)
+    helmet.scale.set(1, 1.1, 1.05)
+    helmet.position.set(0, 2.55, 0)
+    helmet.castShadow = true
+    this.rider.add(helmet)
+
+    // visor — wide glowing strip
+    const visorMat = new THREE.MeshBasicMaterial({
       color: 0xff2a6d,
-      emissive: 0xff2a6d,
-      emissiveIntensity: 2,
-      metalness: 1,
-      roughness: 0,
+      transparent: true,
+      opacity: 0.9,
     })
-    const visor = new THREE.Mesh(visorGeo, visorMat)
-    visor.position.set(0, 1.5, 0.15)
-    group.add(visor)
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.1, 0.28), visorMat)
+    visor.position.set(0, 2.52, 0.08)
+    this.rider.add(visor)
+    this.visor = visor
 
-    const stripGeo = new THREE.BoxGeometry(0.05, 0.8, 0.05)
-    const stripMat = new THREE.MeshStandardMaterial({
+    // visor glow light
+    const visorLight = new THREE.PointLight(0xff2a6d, 1.5, 4)
+    visorLight.position.set(0, 2.52, 0.3)
+    this.rider.add(visorLight)
+    this.visorLight = visorLight
+
+    // arms
+    const armMat = bodyMat
+    for (const side of [-1, 1]) {
+      const upperArm = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08, 0.07, 0.5, 8),
+        armMat
+      )
+      upperArm.position.set(side * 0.45, 1.9, 0.05)
+      upperArm.rotation.x = -0.8
+      upperArm.rotation.z = side * 0.2
+      this.rider.add(upperArm)
+
+      const forearm = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.07, 0.06, 0.45, 8),
+        armMat
+      )
+      forearm.position.set(side * 0.42, 1.55, 0.25)
+      forearm.rotation.x = -0.4
+      this.rider.add(forearm)
+
+      // cyber arm strip
+      const armStrip = new THREE.Mesh(
+        new THREE.BoxGeometry(0.03, 0.4, 0.03),
+        new THREE.MeshBasicMaterial({ color: 0x05d9e8 })
+      )
+      armStrip.position.copy(forearm.position)
+      armStrip.rotation.copy(forearm.rotation)
+      this.rider.add(armStrip)
+
+      // gloves
+      const glove = new THREE.Mesh(
+        new THREE.SphereGeometry(0.06, 8, 8),
+        new THREE.MeshStandardMaterial({ color: 0x0a0a1e, metalness: 0.9, roughness: 0.1 })
+      )
+      glove.position.set(side * 0.4, 1.35, 0.35)
+      this.rider.add(glove)
+    }
+
+    // legs
+    for (const side of [-1, 1]) {
+      const thigh = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.1, 0.09, 0.5, 8),
+        bodyMat
+      )
+      thigh.position.set(side * 0.2, 1.15, 0.1)
+      thigh.rotation.x = -0.6
+      this.rider.add(thigh)
+
+      const shin = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08, 0.07, 0.45, 8),
+        bodyMat
+      )
+      shin.position.set(side * 0.22, 0.8, 0.25)
+      shin.rotation.x = 0.3
+      this.rider.add(shin)
+
+      // knee guard neon
+      const kneeGuard = new THREE.Mesh(
+        new THREE.BoxGeometry(0.12, 0.08, 0.12),
+        new THREE.MeshBasicMaterial({
+          color: side > 0 ? 0x05d9e8 : 0xff2a6d,
+          transparent: true,
+          opacity: 0.7,
+        })
+      )
+      kneeGuard.position.set(side * 0.22, 0.95, 0.2)
+      this.rider.add(kneeGuard)
+
+      // boots
+      const boot = new THREE.Mesh(
+        new THREE.BoxGeometry(0.12, 0.15, 0.22),
+        new THREE.MeshStandardMaterial({ color: 0x0a0a1e, metalness: 0.9, roughness: 0.1 })
+      )
+      boot.position.set(side * 0.22, 0.6, 0.35)
+      this.rider.add(boot)
+    }
+
+    this.scene.add(this.rider)
+  }
+
+  buildHoverBike() {
+    this.bike = new THREE.Group()
+
+    const frameMat = new THREE.MeshStandardMaterial({
+      color: 0x0d0d1a,
+      metalness: 0.9,
+      roughness: 0.15,
+    })
+
+    // main body — sleek elongated shape
+    const bodyGeo = new THREE.BoxGeometry(0.8, 0.3, 2.4)
+    const body = new THREE.Mesh(bodyGeo, frameMat)
+    body.position.y = 0.4
+    body.castShadow = true
+    this.bike.add(body)
+
+    // front fairing — wedge
+    const fairingGeo = new THREE.ConeGeometry(0.35, 1.2, 4)
+    const fairing = new THREE.Mesh(fairingGeo, frameMat)
+    fairing.rotation.x = Math.PI / 2
+    fairing.rotation.y = Math.PI / 4
+    fairing.position.set(0, 0.5, 1.5)
+    fairing.castShadow = true
+    this.bike.add(fairing)
+
+    // rear section — tapered
+    const rearGeo = new THREE.BoxGeometry(0.6, 0.25, 0.8)
+    const rear = new THREE.Mesh(rearGeo, frameMat)
+    rear.position.set(0, 0.35, -1.3)
+    this.bike.add(rear)
+
+    // handlebar
+    const barMat = new THREE.MeshStandardMaterial({
+      color: 0x222233,
+      metalness: 0.95,
+      roughness: 0.1,
+    })
+    const handlebar = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.9, 8), barMat)
+    handlebar.rotation.z = Math.PI / 2
+    handlebar.position.set(0, 0.75, 0.9)
+    this.bike.add(handlebar)
+
+    // handlebar grips
+    for (const side of [-1, 1]) {
+      const grip = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.05, 0.05, 0.12, 8),
+        new THREE.MeshBasicMaterial({ color: 0xff2a6d })
+      )
+      grip.rotation.z = Math.PI / 2
+      grip.position.set(side * 0.45, 0.75, 0.9)
+      this.bike.add(grip)
+    }
+
+    // neon underglow strips
+    const underglowColors = [0x05d9e8, 0xff2a6d]
+    for (let i = 0; i < 2; i++) {
+      const side = i === 0 ? -1 : 1
+      const glowStrip = new THREE.Mesh(
+        new THREE.BoxGeometry(0.04, 0.04, 2.2),
+        new THREE.MeshBasicMaterial({ color: underglowColors[i] })
+      )
+      glowStrip.position.set(side * 0.38, 0.2, 0)
+      this.bike.add(glowStrip)
+    }
+
+    // center underglow
+    const centerGlow = new THREE.Mesh(
+      new THREE.BoxGeometry(0.6, 0.02, 2.0),
+      new THREE.MeshBasicMaterial({
+        color: 0x05d9e8,
+        transparent: true,
+        opacity: 0.3,
+      })
+    )
+    centerGlow.position.y = 0.15
+    this.bike.add(centerGlow)
+
+    // underglow light
+    this.bikeLight = new THREE.PointLight(0x05d9e8, 2, 6)
+    this.bikeLight.position.set(0, 0.1, 0)
+    this.bike.add(this.bikeLight)
+
+    // headlight
+    const headlight = new THREE.SpotLight(0x05d9e8, 3, 20, 0.4, 0.5)
+    headlight.position.set(0, 0.5, 1.8)
+    headlight.target.position.set(0, 0, 10)
+    this.bike.add(headlight)
+    this.bike.add(headlight.target)
+
+    // headlight visual
+    const headlightGeo = new THREE.CircleGeometry(0.12, 16)
+    const headlightMat = new THREE.MeshBasicMaterial({ color: 0x05d9e8 })
+    const headlightMesh = new THREE.Mesh(headlightGeo, headlightMat)
+    headlightMesh.position.set(0, 0.5, 1.81)
+    this.bike.add(headlightMesh)
+
+    // taillight
+    const tailGeo = new THREE.BoxGeometry(0.5, 0.06, 0.04)
+    const tailMat = new THREE.MeshBasicMaterial({ color: 0xff2a6d })
+    const taillight = new THREE.Mesh(tailGeo, tailMat)
+    taillight.position.set(0, 0.4, -1.7)
+    this.bike.add(taillight)
+    this.taillight = taillight
+
+    // thruster exhausts
+    this.thrusters = []
+    for (const xOff of [-0.25, 0.25]) {
+      const thrusterGeo = new THREE.CylinderGeometry(0.08, 0.12, 0.3, 8, 1, true)
+      const thrusterMat = new THREE.MeshBasicMaterial({
+        color: 0x7b2ff7,
+        transparent: true,
+        opacity: 0.6,
+        side: THREE.DoubleSide,
+      })
+      const thruster = new THREE.Mesh(thrusterGeo, thrusterMat)
+      thruster.rotation.x = Math.PI / 2
+      thruster.position.set(xOff, 0.35, -1.75)
+      this.bike.add(thruster)
+      this.thrusters.push(thruster)
+
+      const thrusterLight = new THREE.PointLight(0x7b2ff7, 1, 4)
+      thrusterLight.position.set(xOff, 0.35, -1.9)
+      this.bike.add(thrusterLight)
+      this.thrusters.push(thrusterLight)
+    }
+
+    // hover pads (4 corners — glowing discs underneath)
+    const padMat = new THREE.MeshBasicMaterial({
       color: 0x05d9e8,
-      emissive: 0x05d9e8,
-      emissiveIntensity: 1.5,
+      transparent: true,
+      opacity: 0.4,
     })
-    const stripL = new THREE.Mesh(stripGeo, stripMat)
-    stripL.position.set(-0.25, 0.8, 0)
-    group.add(stripL)
+    const padPositions = [
+      [-0.3, 0.05, 0.8],
+      [0.3, 0.05, 0.8],
+      [-0.3, 0.05, -0.8],
+      [0.3, 0.05, -0.8],
+    ]
+    this.hoverPads = []
+    for (const pos of padPositions) {
+      const pad = new THREE.Mesh(new THREE.CircleGeometry(0.15, 16), padMat.clone())
+      pad.rotation.x = -Math.PI / 2
+      pad.position.set(...pos)
+      this.bike.add(pad)
+      this.hoverPads.push(pad)
+    }
 
-    const stripR = stripL.clone()
-    stripR.position.set(0.25, 0.8, 0)
-    group.add(stripR)
+    // side panels with accent
+    for (const side of [-1, 1]) {
+      const panel = new THREE.Mesh(
+        new THREE.BoxGeometry(0.04, 0.2, 1.5),
+        new THREE.MeshStandardMaterial({
+          color: 0x111122,
+          metalness: 0.9,
+          roughness: 0.1,
+        })
+      )
+      panel.position.set(side * 0.42, 0.4, -0.1)
+      this.bike.add(panel)
 
-    this.mesh = group
-    this.scene.add(this.mesh)
+      const panelAccent = new THREE.Mesh(
+        new THREE.BoxGeometry(0.02, 0.04, 1.0),
+        new THREE.MeshBasicMaterial({
+          color: side > 0 ? 0x05d9e8 : 0xff2a6d,
+        })
+      )
+      panelAccent.position.set(side * 0.44, 0.45, -0.1)
+      this.bike.add(panelAccent)
+    }
+
+    this.scene.add(this.bike)
+  }
+
+  setupTrails() {
+    this.trailPoints = []
+    const maxTrailLength = 60
+
+    this.trailGeo = new THREE.BufferGeometry()
+    const positions = new Float32Array(maxTrailLength * 3)
+    this.trailGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+
+    this.trailLeft = new THREE.Line(
+      this.trailGeo.clone(),
+      new THREE.LineBasicMaterial({
+        color: 0x05d9e8,
+        transparent: true,
+        opacity: 0.4,
+      })
+    )
+
+    this.trailRight = new THREE.Line(
+      this.trailGeo.clone(),
+      new THREE.LineBasicMaterial({
+        color: 0xff2a6d,
+        transparent: true,
+        opacity: 0.4,
+      })
+    )
+
+    this.scene.add(this.trailLeft)
+    this.scene.add(this.trailRight)
+    this.trailIndex = 0
+    this.maxTrailLength = maxTrailLength
   }
 
   update(delta) {
+    this.time += delta
     const inputs = this.game.inputs.keys
     const world = this.game.world.physicsWorld
 
-    if (!this.body || !world) {
-      this.updateWithoutPhysics(delta, inputs)
-      return
-    }
-
-    world.step()
-
-    const pos = this.body.translation()
-    const vel = this.body.linvel()
-
-    this.grounded = pos.y <= 1.1
-
     let moveX = 0
     let moveZ = 0
     if (inputs.forward) moveZ -= 1
@@ -107,58 +416,149 @@ export class Player {
     if (len > 0) {
       moveX /= len
       moveZ /= len
-      this.rotation = Math.atan2(moveX, moveZ)
+      this.targetRotation = Math.atan2(moveX, moveZ)
     }
 
-    const currentSpeed = inputs.sprint ? this.speed * this.sprintMultiplier : this.speed
+    // smooth rotation
+    let rotDiff = this.targetRotation - this.rotation
+    while (rotDiff > Math.PI) rotDiff -= Math.PI * 2
+    while (rotDiff < -Math.PI) rotDiff += Math.PI * 2
+    this.rotation += rotDiff * Math.min(1, 8 * delta)
 
-    let newVelY = vel.y
-    if (inputs.jump && this.grounded) {
-      newVelY = this.jumpForce
+    // lean into turns
+    const targetLean = -rotDiff * 0.8
+    this.lean += (targetLean - this.lean) * Math.min(1, 6 * delta)
+
+    const isSprinting = inputs.sprint
+    const currentSpeed = isSprinting ? this.speed * this.sprintMultiplier : this.speed
+    const isMoving = len > 0
+
+    if (this.body && world) {
+      world.step()
+      const pos = this.body.translation()
+      const vel = this.body.linvel()
+
+      this.grounded = pos.y <= 1.5
+
+      let newVelY = vel.y
+      if (inputs.jump && this.grounded) {
+        newVelY = this.jumpForce
+        this.game.view?.shake(0.2)
+      }
+
+      this.body.setLinvel(
+        { x: moveX * currentSpeed, y: newVelY, z: moveZ * currentSpeed },
+        true
+      )
+
+      this.position.x = pos.x
+      this.position.y = pos.y
+      this.position.z = pos.z
+
+      if (pos.y < -20) {
+        this.body.setTranslation({ x: 0, y: 3, z: 0 }, true)
+        this.body.setLinvel({ x: 0, y: 0, z: 0 }, true)
+      }
+    } else {
+      this.position.x += moveX * currentSpeed * delta
+      this.position.z += moveZ * currentSpeed * delta
     }
 
-    this.body.setLinvel(
-      { x: moveX * currentSpeed, y: newVelY, z: moveZ * currentSpeed },
-      true
-    )
+    // hover bob
+    const hoverY = this.position.y + 0.3 + Math.sin(this.time * 3) * 0.08
 
-    this.position.x = pos.x
-    this.position.y = pos.y
-    this.position.z = pos.z
+    // update bike
+    if (this.bike) {
+      this.bike.position.set(this.position.x, hoverY, this.position.z)
+      this.bike.rotation.y = this.rotation
+      this.bike.rotation.z = this.lean * 0.3
 
-    if (this.mesh) {
-      this.mesh.position.set(pos.x, pos.y, pos.z)
-      this.mesh.rotation.y = this.rotation
+      // thruster pulse
+      for (const t of this.thrusters) {
+        if (t.isMesh) {
+          const intensity = isMoving ? (isSprinting ? 0.9 : 0.6) : 0.3
+          t.material.opacity = intensity + Math.sin(this.time * 15) * 0.15
+          t.scale.y = intensity + 0.3 + Math.sin(this.time * 20) * 0.1
+        } else if (t.isLight) {
+          t.intensity = isMoving ? (isSprinting ? 2 : 1) : 0.3
+        }
+      }
+
+      // hover pad pulse
+      for (const pad of this.hoverPads) {
+        pad.material.opacity = 0.3 + Math.sin(this.time * 5 + pad.position.x * 10) * 0.15
+      }
+
+      // underglow intensity
+      if (this.bikeLight) {
+        this.bikeLight.intensity = isMoving ? (isSprinting ? 3 : 2) : 1
+        this.bikeLight.color.setHex(isSprinting ? 0xff2a6d : 0x05d9e8)
+      }
+
+      // taillight brightness
+      if (this.taillight) {
+        this.taillight.material.opacity = isMoving ? 0.6 : 1.0
+      }
     }
 
-    if (pos.y < -20) {
-      this.body.setTranslation({ x: 0, y: 5, z: 0 }, true)
-      this.body.setLinvel({ x: 0, y: 0, z: 0 }, true)
+    // update rider
+    if (this.rider) {
+      this.rider.position.set(this.position.x, hoverY, this.position.z)
+      this.rider.rotation.y = this.rotation
+      this.rider.rotation.z = this.lean * 0.2
+
+      // visor flicker
+      if (this.visor) {
+        const flicker = Math.sin(this.time * 30) > 0.95 ? 0.4 : 0.9
+        this.visor.material.opacity = flicker
+      }
     }
+
+    // update trails
+    this.updateTrails(isMoving)
   }
 
-  updateWithoutPhysics(delta, inputs) {
-    let moveX = 0
-    let moveZ = 0
-    if (inputs.forward) moveZ -= 1
-    if (inputs.backward) moveZ += 1
-    if (inputs.left) moveX -= 1
-    if (inputs.right) moveX += 1
+  updateTrails(isMoving) {
+    if (!isMoving) return
 
-    const len = Math.sqrt(moveX * moveX + moveZ * moveZ)
-    if (len > 0) {
-      moveX /= len
-      moveZ /= len
-      this.rotation = Math.atan2(moveX, moveZ)
+    const sinR = Math.sin(this.rotation)
+    const cosR = Math.cos(this.rotation)
+    const perpX = cosR
+    const perpZ = -sinR
+    const offset = 0.35
+    const trailY = this.position.y + 0.15
+
+    const leftPos = [
+      this.position.x - perpX * offset,
+      trailY,
+      this.position.z - perpZ * offset,
+    ]
+    const rightPos = [
+      this.position.x + perpX * offset,
+      trailY,
+      this.position.z + perpZ * offset,
+    ]
+
+    this.trailPoints.push({ left: leftPos, right: rightPos })
+    if (this.trailPoints.length > this.maxTrailLength) {
+      this.trailPoints.shift()
     }
 
-    const speed = inputs.sprint ? this.speed * this.sprintMultiplier : this.speed
-    this.position.x += moveX * speed * delta
-    this.position.z += moveZ * speed * delta
-
-    if (this.mesh) {
-      this.mesh.position.set(this.position.x, this.position.y, this.position.z)
-      this.mesh.rotation.y = this.rotation
+    const updateTrailLine = (line, side) => {
+      const posArr = line.geometry.attributes.position.array
+      for (let i = 0; i < this.maxTrailLength; i++) {
+        if (i < this.trailPoints.length) {
+          const p = this.trailPoints[i][side]
+          posArr[i * 3] = p[0]
+          posArr[i * 3 + 1] = p[1]
+          posArr[i * 3 + 2] = p[2]
+        }
+      }
+      line.geometry.attributes.position.needsUpdate = true
+      line.geometry.setDrawRange(0, this.trailPoints.length)
     }
+
+    updateTrailLine(this.trailLeft, 'left')
+    updateTrailLine(this.trailRight, 'right')
   }
 }

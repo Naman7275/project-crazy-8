@@ -28,6 +28,8 @@ export class World {
     this.setupDataParticles()
     this.setupElectricArcs()
     this.setupFloatingDebris()
+    this.setupDistantCity()
+    this.setupFlyingTraffic()
     this.setupSkybox()
   }
 
@@ -557,6 +559,109 @@ export class World {
     }
   }
 
+  setupDistantCity() {
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x060612,
+      transparent: true,
+      opacity: 0.8,
+    })
+
+    const windowColors = [0x05d9e8, 0xff2a6d, 0x7b2ff7]
+
+    for (let i = 0; i < 40; i++) {
+      const angle = (i / 40) * Math.PI * 2
+      const dist = 50 + Math.random() * 30
+      const w = 3 + Math.random() * 6
+      const h = 15 + Math.random() * 45
+      const d = 3 + Math.random() * 5
+
+      const geo = new THREE.BoxGeometry(w, h, d)
+      const building = new THREE.Mesh(geo, mat)
+      building.position.set(
+        Math.cos(angle) * dist,
+        h / 2 - 5,
+        Math.sin(angle) * dist
+      )
+      building.rotation.y = Math.random() * Math.PI
+      this.scene.add(building)
+
+      const winCount = Math.floor(Math.random() * 15) + 5
+      for (let j = 0; j < winCount; j++) {
+        const winMat = new THREE.MeshBasicMaterial({
+          color: windowColors[Math.floor(Math.random() * 3)],
+          transparent: true,
+          opacity: 0.2 + Math.random() * 0.3,
+        })
+        const win = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.7), winMat)
+        const wy = -h / 2 + 2 + Math.random() * (h - 4)
+        win.position.set(
+          building.position.x + (Math.random() - 0.5) * w * 0.8,
+          building.position.y + wy,
+          building.position.z + d / 2 + 0.01
+        )
+        win.rotation.y = building.rotation.y
+        this.scene.add(win)
+      }
+    }
+  }
+
+  setupFlyingTraffic() {
+    this.flyingCars = []
+    const colors = [0xff2a6d, 0x05d9e8, 0x7b2ff7, 0x00ff9f, 0xf9f002]
+
+    for (let i = 0; i < 8; i++) {
+      const group = new THREE.Group()
+
+      const carBody = new THREE.Mesh(
+        new THREE.BoxGeometry(0.6, 0.2, 1.2),
+        new THREE.MeshBasicMaterial({
+          color: 0x0a0a1e,
+          transparent: true,
+          opacity: 0.6,
+        })
+      )
+      group.add(carBody)
+
+      const trailColor = colors[i % colors.length]
+      const tail = new THREE.Mesh(
+        new THREE.BoxGeometry(0.3, 0.04, 0.6),
+        new THREE.MeshBasicMaterial({
+          color: trailColor,
+          transparent: true,
+          opacity: 0.5,
+        })
+      )
+      tail.position.set(0, 0, -0.8)
+      group.add(tail)
+
+      const light = new THREE.PointLight(trailColor, 0.5, 8)
+      light.position.set(0, 0, -0.5)
+      group.add(light)
+
+      const lane = 20 + Math.random() * 40
+      const height = 15 + Math.random() * 25
+      const angle = Math.random() * Math.PI * 2
+      const speed = 3 + Math.random() * 8
+      const direction = Math.random() > 0.5 ? 1 : -1
+
+      group.position.set(
+        Math.cos(angle) * lane,
+        height,
+        Math.sin(angle) * lane
+      )
+
+      this.scene.add(group)
+      this.flyingCars.push({
+        mesh: group,
+        angle,
+        lane,
+        height,
+        speed: speed * direction,
+        bobSpeed: 0.5 + Math.random(),
+      })
+    }
+  }
+
   setupSkybox() {
     const geo = new THREE.SphereGeometry(100, 32, 32)
     const mat = new THREE.MeshBasicMaterial({
@@ -662,6 +767,14 @@ export class World {
 
     if (this.groundGlow) {
       this.groundGlow.material.opacity = 0.015 + Math.sin(this.time * 0.5) * 0.005
+    }
+
+    for (const car of this.flyingCars) {
+      car.angle += (car.speed / car.lane) * delta
+      car.mesh.position.x = Math.cos(car.angle) * car.lane
+      car.mesh.position.z = Math.sin(car.angle) * car.lane
+      car.mesh.position.y = car.height + Math.sin(this.time * car.bobSpeed) * 0.3
+      car.mesh.rotation.y = -car.angle + Math.PI / 2
     }
   }
 }

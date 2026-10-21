@@ -4,9 +4,9 @@ export class View {
   constructor() {
     this.game = Game.getInstance()
     this.camera = this.game.rendering.camera
-    this.offset = { x: 0, y: 14, z: 20 }
+    this.offset = { x: 0, y: 10, z: 16 }
     this.lookAtTarget = { x: 0, y: 2, z: 0 }
-    this.smoothness = 4
+    this.smoothness = 3.5
     this.shakeIntensity = 0
     this.shakeDecay = 5
   }
@@ -20,26 +20,30 @@ export class View {
 
     const pos = this.game.player.position
     const inputs = this.game.inputs?.keys || {}
+    const rotation = this.game.player.rotation || 0
 
-    const dynamicY = inputs.sprint ? this.offset.y - 2 : this.offset.y
-    const dynamicZ = inputs.sprint ? this.offset.z - 3 : this.offset.z
+    const behind = inputs.sprint ? 14 : 16
+    const height = inputs.sprint ? 7 : 10
+    const lookAhead = inputs.sprint ? 4 : 2
 
-    const targetX = pos.x + this.offset.x
-    const targetY = pos.y + dynamicY
-    const targetZ = pos.z + dynamicZ
+    const camX = pos.x - Math.sin(rotation) * behind
+    const camZ = pos.z - Math.cos(rotation) * behind
+    const camY = pos.y + height
 
     const t = 1 - Math.exp(-this.smoothness * delta)
-    this.camera.position.x += (targetX - this.camera.position.x) * t
-    this.camera.position.y += (targetY - this.camera.position.y) * t
-    this.camera.position.z += (targetZ - this.camera.position.z) * t
+    this.camera.position.x += (camX - this.camera.position.x) * t
+    this.camera.position.y += (camY - this.camera.position.y) * t
+    this.camera.position.z += (camZ - this.camera.position.z) * t
 
-    this.lookAtTarget.x += (pos.x - this.lookAtTarget.x) * t
-    this.lookAtTarget.y += (pos.y + 1.5 - this.lookAtTarget.y) * t
-    this.lookAtTarget.z += (pos.z - this.lookAtTarget.z) * t
+    const lookX = pos.x + Math.sin(rotation) * lookAhead
+    const lookZ = pos.z + Math.cos(rotation) * lookAhead
+    this.lookAtTarget.x += (lookX - this.lookAtTarget.x) * t
+    this.lookAtTarget.y += (pos.y + 2 - this.lookAtTarget.y) * t
+    this.lookAtTarget.z += (lookZ - this.lookAtTarget.z) * t
 
     if (this.shakeIntensity > 0.001) {
       this.camera.position.x += (Math.random() - 0.5) * this.shakeIntensity
-      this.camera.position.y += (Math.random() - 0.5) * this.shakeIntensity
+      this.camera.position.y += (Math.random() - 0.5) * this.shakeIntensity * 0.5
       this.shakeIntensity *= Math.exp(-this.shakeDecay * delta)
     }
 
