@@ -47,6 +47,12 @@ export class View {
       this.shakeIntensity *= Math.exp(-this.shakeDecay * delta)
     }
 
+    // sprint micro-shake for speed feel
+    if (inputs.sprint && (inputs.forward || inputs.backward || inputs.left || inputs.right)) {
+      this.camera.position.x += (Math.random() - 0.5) * 0.04
+      this.camera.position.y += (Math.random() - 0.5) * 0.02
+    }
+
     this.camera.lookAt(
       this.lookAtTarget.x,
       this.lookAtTarget.y,

@@ -15,6 +15,9 @@ export class World {
     this.lightBeams = []
     this.dataParticles = null
     this.electricArcs = []
+    this.billboards = []
+    this.skyStructures = []
+    this.powerLines = []
 
     this.setupPhysics()
     this.setupLighting()
@@ -30,6 +33,15 @@ export class World {
     this.setupFloatingDebris()
     this.setupDistantCity()
     this.setupFlyingTraffic()
+    this.setupBillboards()
+    this.setupSkyStructures()
+    this.setupGroundFog()
+    this.setupPowerLines()
+    this.setupGodRays()
+    this.setupEnergyFields()
+    this.setupHoloBeams()
+    this.setupEmbers()
+    this.setupLightning()
     this.setupSkybox()
   }
 
@@ -662,6 +674,397 @@ export class World {
     }
   }
 
+  setupBillboards() {
+    const billboardData = [
+      { x: -18, y: 12, z: -21, w: 5, h: 3, rot: 0.3, color: 0x05d9e8, text: 'SYSTEM//ONLINE' },
+      { x: 16, y: 18, z: -18, w: 6, h: 3.5, rot: -0.5, color: 0xff2a6d, text: 'NIGHT_CITY' },
+      { x: -24, y: 8, z: 3, w: 4, h: 2.5, rot: 1.2, color: 0x7b2ff7, text: 'NANOSPHERE' },
+      { x: 20, y: 15, z: 13, w: 5, h: 3, rot: -1.0, color: 0x00ff9f, text: 'EXPLORE' },
+      { x: 0, y: 25, z: -25, w: 8, h: 4, rot: 0, color: 0x05d9e8, text: 'WELCOME' },
+      { x: -22, y: 18, z: -12, w: 4, h: 2.5, rot: 0.8, color: 0xff2a6d, text: 'PROJECTS' },
+    ]
+
+    for (const bb of billboardData) {
+      const group = new THREE.Group()
+
+      // screen frame
+      const frameMat = new THREE.MeshStandardMaterial({
+        color: 0x111122,
+        metalness: 0.9,
+        roughness: 0.1,
+      })
+      const frame = new THREE.Mesh(
+        new THREE.BoxGeometry(bb.w + 0.3, bb.h + 0.3, 0.1),
+        frameMat
+      )
+      group.add(frame)
+
+      // glowing screen
+      const screenMat = new THREE.MeshBasicMaterial({
+        color: bb.color,
+        transparent: true,
+        opacity: 0.15,
+      })
+      const screen = new THREE.Mesh(
+        new THREE.PlaneGeometry(bb.w, bb.h),
+        screenMat
+      )
+      screen.position.z = 0.06
+      group.add(screen)
+
+      // scanline on screen
+      const scanline = new THREE.Mesh(
+        new THREE.PlaneGeometry(bb.w, 0.05),
+        new THREE.MeshBasicMaterial({
+          color: bb.color,
+          transparent: true,
+          opacity: 0.6,
+        })
+      )
+      scanline.position.z = 0.07
+      group.add(scanline)
+
+      // border glow strips
+      const borderMat = new THREE.MeshBasicMaterial({
+        color: bb.color,
+        transparent: true,
+        opacity: 0.5,
+      })
+      const topBorder = new THREE.Mesh(new THREE.BoxGeometry(bb.w, 0.05, 0.05), borderMat)
+      topBorder.position.set(0, bb.h / 2, 0.06)
+      group.add(topBorder)
+      const botBorder = topBorder.clone()
+      botBorder.position.y = -bb.h / 2
+      group.add(botBorder)
+      const leftBorder = new THREE.Mesh(new THREE.BoxGeometry(0.05, bb.h, 0.05), borderMat)
+      leftBorder.position.set(-bb.w / 2, 0, 0.06)
+      group.add(leftBorder)
+      const rightBorder = leftBorder.clone()
+      rightBorder.position.x = bb.w / 2
+      group.add(rightBorder)
+
+      // light cast
+      const light = new THREE.PointLight(bb.color, 1.5, 12)
+      light.position.z = 2
+      group.add(light)
+
+      group.position.set(bb.x, bb.y, bb.z)
+      group.rotation.y = bb.rot
+      this.scene.add(group)
+      this.billboards.push({
+        group,
+        scanline,
+        screen,
+        height: bb.h,
+        speed: 0.8 + Math.random() * 1.5,
+        flickerTimer: Math.random() * 10,
+      })
+    }
+  }
+
+  setupSkyStructures() {
+    // massive rotating geometric structures in the sky
+    const structures = [
+      { x: 0, y: 45, z: -30, geo: 'icosa', size: 8, color: 0x05d9e8, speed: 0.15 },
+      { x: -35, y: 55, z: 20, geo: 'octa', size: 6, color: 0xff2a6d, speed: 0.2 },
+      { x: 30, y: 50, z: -15, geo: 'torus', size: 7, color: 0x7b2ff7, speed: 0.1 },
+      { x: -15, y: 60, z: -40, geo: 'dodeca', size: 5, color: 0x00ff9f, speed: 0.18 },
+    ]
+
+    for (const s of structures) {
+      const group = new THREE.Group()
+
+      let geo
+      if (s.geo === 'icosa') geo = new THREE.IcosahedronGeometry(s.size, 1)
+      else if (s.geo === 'octa') geo = new THREE.OctahedronGeometry(s.size, 1)
+      else if (s.geo === 'torus') geo = new THREE.TorusGeometry(s.size, s.size * 0.15, 8, 32)
+      else geo = new THREE.DodecahedronGeometry(s.size, 0)
+
+      // wireframe outer
+      const wireMat = new THREE.MeshBasicMaterial({
+        color: s.color,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.15,
+      })
+      const wire = new THREE.Mesh(geo, wireMat)
+      group.add(wire)
+
+      // solid inner (smaller)
+      let innerGeo
+      if (s.geo === 'torus') innerGeo = new THREE.TorusGeometry(s.size * 0.6, s.size * 0.08, 8, 32)
+      else innerGeo = geo.clone().scale(0.5, 0.5, 0.5)
+
+      const innerMat = new THREE.MeshBasicMaterial({
+        color: s.color,
+        transparent: true,
+        opacity: 0.06,
+        side: THREE.DoubleSide,
+      })
+      const inner = new THREE.Mesh(innerGeo || geo, innerMat)
+      group.add(inner)
+
+      // orbiting ring
+      const ringGeo = new THREE.TorusGeometry(s.size * 1.3, 0.03, 8, 64)
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: s.color,
+        transparent: true,
+        opacity: 0.2,
+      })
+      const ring = new THREE.Mesh(ringGeo, ringMat)
+      ring.rotation.x = Math.PI / 3
+      group.add(ring)
+
+      // second ring at different angle
+      const ring2 = new THREE.Mesh(ringGeo.clone(), ringMat.clone())
+      ring2.rotation.x = -Math.PI / 4
+      ring2.rotation.z = Math.PI / 5
+      group.add(ring2)
+
+      // glow
+      const light = new THREE.PointLight(s.color, 2, 30)
+      group.add(light)
+
+      group.position.set(s.x, s.y, s.z)
+      this.scene.add(group)
+      this.skyStructures.push({ group, speed: s.speed, rotAxis: Math.random() * Math.PI })
+    }
+  }
+
+  setupGroundFog() {
+    // layered translucent planes for volumetric fog look
+    const fogLayers = 5
+    for (let i = 0; i < fogLayers; i++) {
+      const fogGeo = new THREE.PlaneGeometry(80, 80)
+      const fogMat = new THREE.MeshBasicMaterial({
+        color: 0x05d9e8,
+        transparent: true,
+        opacity: 0.008,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      })
+      const fog = new THREE.Mesh(fogGeo, fogMat)
+      fog.rotation.x = -Math.PI / 2
+      fog.position.y = 0.1 + i * 0.15
+      this.scene.add(fog)
+    }
+
+    // low-lying fog particles
+    const fogCount = 200
+    const fogPositions = new Float32Array(fogCount * 3)
+    for (let i = 0; i < fogCount; i++) {
+      fogPositions[i * 3] = (Math.random() - 0.5) * 60
+      fogPositions[i * 3 + 1] = 0.2 + Math.random() * 1.5
+      fogPositions[i * 3 + 2] = (Math.random() - 0.5) * 60
+    }
+    const fogParticleGeo = new THREE.BufferGeometry()
+    fogParticleGeo.setAttribute('position', new THREE.BufferAttribute(fogPositions, 3))
+    const fogParticleMat = new THREE.PointsMaterial({
+      color: 0x05d9e8,
+      size: 1.5,
+      transparent: true,
+      opacity: 0.04,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    })
+    this.fogParticles = new THREE.Points(fogParticleGeo, fogParticleMat)
+    this.scene.add(this.fogParticles)
+  }
+
+  setupPowerLines() {
+    const connections = [
+      { from: [-18, 14, -18], to: [0, 28, -22] },
+      { from: [0, 28, -22], to: [15, 22, -15] },
+      { from: [-22, 12, 0], to: [-12, 8, 14] },
+      { from: [15, 22, -15], to: [22, 16, -4] },
+      { from: [18, 18, 10], to: [10, 13, 22] },
+      { from: [-18, 14, -18], to: [-22, 12, 0] },
+    ]
+
+    for (const conn of connections) {
+      const start = new THREE.Vector3(...conn.from)
+      const end = new THREE.Vector3(...conn.to)
+      const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5)
+      mid.y -= 2 // sag
+
+      const curve = new THREE.QuadraticBezierCurve3(start, mid, end)
+      const points = curve.getPoints(30)
+
+      const geo = new THREE.BufferGeometry().setFromPoints(points)
+      const mat = new THREE.LineBasicMaterial({
+        color: 0x05d9e8,
+        transparent: true,
+        opacity: 0.15,
+      })
+      const line = new THREE.Line(geo, mat)
+      this.scene.add(line)
+
+      // spark traveling along wire
+      const sparkMat = new THREE.MeshBasicMaterial({
+        color: 0x05d9e8,
+        transparent: true,
+        opacity: 0.8,
+      })
+      const spark = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 6), sparkMat)
+      this.scene.add(spark)
+
+      this.powerLines.push({
+        curve,
+        spark,
+        t: Math.random(),
+        speed: 0.2 + Math.random() * 0.3,
+        line,
+      })
+    }
+  }
+
+  setupGodRays() {
+    this.godRays = []
+    const rayData = [
+      { x: -20, z: -20, h: 40, w: 3, color: 0x05d9e8, opacity: 0.015 },
+      { x: 15, z: -15, h: 50, w: 4, color: 0xff2a6d, opacity: 0.012 },
+      { x: -12, z: 14, h: 35, w: 2.5, color: 0x7b2ff7, opacity: 0.018 },
+      { x: 18, z: 10, h: 45, w: 3.5, color: 0xff2a6d, opacity: 0.01 },
+      { x: 0, z: -22, h: 55, w: 5, color: 0x00ff9f, opacity: 0.008 },
+      { x: -25, z: 5, h: 38, w: 2, color: 0x05d9e8, opacity: 0.014 },
+      { x: 22, z: -8, h: 42, w: 3, color: 0x7b2ff7, opacity: 0.011 },
+    ]
+
+    for (const r of rayData) {
+      const geo = new THREE.CylinderGeometry(r.w * 0.3, r.w, r.h, 6, 1, true)
+      const mat = new THREE.MeshBasicMaterial({
+        color: r.color,
+        transparent: true,
+        opacity: r.opacity,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      })
+      const mesh = new THREE.Mesh(geo, mat)
+      mesh.position.set(r.x, r.h / 2, r.z)
+      this.scene.add(mesh)
+      this.godRays.push({
+        mesh,
+        baseOpacity: r.opacity,
+        speed: 0.5 + Math.random(),
+        phase: Math.random() * Math.PI * 2,
+      })
+    }
+  }
+
+  setupEnergyFields() {
+    this.energyFields = []
+    const fieldData = [
+      { x: 0, y: 2, z: 0, size: 10, color: 0x05d9e8 },
+      { x: -18, y: 3, z: -18, size: 8, color: 0xff2a6d },
+      { x: 15, y: 3, z: -15, size: 7, color: 0x05d9e8 },
+    ]
+
+    for (const f of fieldData) {
+      const geo = new THREE.IcosahedronGeometry(f.size, 2)
+      const mat = new THREE.MeshBasicMaterial({
+        color: f.color,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.03,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+      const mesh = new THREE.Mesh(geo, mat)
+      mesh.position.set(f.x, f.y, f.z)
+      this.scene.add(mesh)
+      this.energyFields.push({
+        mesh,
+        speed: 0.1 + Math.random() * 0.15,
+        pulse: 0.8 + Math.random() * 0.5,
+        baseScale: 1,
+      })
+    }
+  }
+
+  setupHoloBeams() {
+    this.holoBeams = []
+    const beamPositions = [
+      { x: -18, z: -18, color: 0xff2a6d },
+      { x: 15, z: -15, color: 0x05d9e8 },
+      { x: -12, z: 14, color: 0x7b2ff7 },
+      { x: 18, z: 10, color: 0xff2a6d },
+      { x: 0, z: -22, color: 0x00ff9f },
+    ]
+
+    for (const b of beamPositions) {
+      const geo = new THREE.CylinderGeometry(0.3, 1.5, 30, 8, 1, true)
+      const mat = new THREE.MeshBasicMaterial({
+        color: b.color,
+        transparent: true,
+        opacity: 0.02,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+      const mesh = new THREE.Mesh(geo, mat)
+      mesh.position.set(b.x, 15, b.z)
+      this.scene.add(mesh)
+      this.holoBeams.push({
+        mesh,
+        baseOpacity: 0.02,
+        speed: 1 + Math.random() * 2,
+        phase: Math.random() * Math.PI * 2,
+      })
+    }
+  }
+
+  setupEmbers() {
+    const count = 300
+    const positions = new Float32Array(count * 3)
+    const colors = new Float32Array(count * 3)
+    const neonColors = [
+      [1, 0.16, 0.43], // pink
+      [0.02, 0.85, 0.91], // cyan
+      [0.48, 0.18, 0.97], // purple
+      [0, 1, 0.62], // green
+      [0.98, 0.94, 0.01], // yellow
+    ]
+
+    for (let i = 0; i < count; i++) {
+      positions[i * 3] = (Math.random() - 0.5) * 60
+      positions[i * 3 + 1] = Math.random() * 20
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 60
+      const c = neonColors[Math.floor(Math.random() * neonColors.length)]
+      colors[i * 3] = c[0]
+      colors[i * 3 + 1] = c[1]
+      colors[i * 3 + 2] = c[2]
+    }
+
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+
+    const mat = new THREE.PointsMaterial({
+      size: 0.08,
+      transparent: true,
+      opacity: 0.6,
+      vertexColors: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    })
+
+    this.embers = new THREE.Points(geo, mat)
+    this.scene.add(this.embers)
+  }
+
+  setupLightning() {
+    this.lightningTimer = 5 + Math.random() * 5
+    this.lightningFlash = new THREE.PointLight(0x7b2ff7, 0, 200)
+    this.lightningFlash.position.set(0, 60, -20)
+    this.scene.add(this.lightningFlash)
+
+    // secondary flash for atmosphere
+    this.lightningFlash2 = new THREE.PointLight(0x05d9e8, 0, 150)
+    this.lightningFlash2.position.set(-30, 50, 10)
+    this.scene.add(this.lightningFlash2)
+  }
+
   setupSkybox() {
     const geo = new THREE.SphereGeometry(100, 32, 32)
     const mat = new THREE.MeshBasicMaterial({
@@ -775,6 +1178,103 @@ export class World {
       car.mesh.position.z = Math.sin(car.angle) * car.lane
       car.mesh.position.y = car.height + Math.sin(this.time * car.bobSpeed) * 0.3
       car.mesh.rotation.y = -car.angle + Math.PI / 2
+    }
+
+    // billboard scanline + flicker
+    for (const bb of this.billboards) {
+      bb.flickerTimer += delta
+      const scanY = ((this.time * bb.speed) % 1) * bb.height - bb.height / 2
+      bb.scanline.position.y = scanY
+
+      if (Math.sin(bb.flickerTimer * 12) > 0.92) {
+        bb.screen.material.opacity = 0.02
+        bb.scanline.material.opacity = 0.1
+      } else {
+        bb.screen.material.opacity = 0.15 + Math.sin(this.time * 1.5) * 0.03
+        bb.scanline.material.opacity = 0.6
+      }
+    }
+
+    // sky structures rotation
+    for (const s of this.skyStructures) {
+      s.group.rotation.y += s.speed * delta
+      s.group.rotation.x = Math.sin(this.time * 0.3 + s.rotAxis) * 0.2
+      s.group.children.forEach((child, i) => {
+        if (child.isMesh && i > 0) child.rotation.z += s.speed * 0.5 * delta
+      })
+      s.group.position.y += Math.sin(this.time * 0.2 + s.rotAxis) * 0.003
+    }
+
+    // ground fog drift
+    if (this.fogParticles) {
+      const fpos = this.fogParticles.geometry.attributes.position.array
+      for (let i = 0; i < fpos.length; i += 3) {
+        fpos[i] += Math.sin(this.time * 0.3 + i) * 0.005
+        fpos[i + 2] += Math.cos(this.time * 0.2 + i) * 0.005
+      }
+      this.fogParticles.geometry.attributes.position.needsUpdate = true
+    }
+
+    // power line sparks
+    for (const pl of this.powerLines) {
+      pl.t += pl.speed * delta
+      if (pl.t > 1) pl.t -= 1
+      const point = pl.curve.getPoint(pl.t)
+      pl.spark.position.copy(point)
+      pl.spark.material.opacity = 0.5 + Math.random() * 0.5
+      pl.line.material.opacity = 0.1 + Math.sin(this.time * 3) * 0.05
+    }
+
+    // volumetric light shafts
+    if (this.godRays) {
+      for (const ray of this.godRays) {
+        ray.mesh.material.opacity = ray.baseOpacity + Math.sin(this.time * ray.speed + ray.phase) * ray.baseOpacity * 0.4
+        ray.mesh.rotation.y += delta * 0.02
+      }
+    }
+
+    // energy field pulse
+    if (this.energyFields) {
+      for (const ef of this.energyFields) {
+        ef.mesh.rotation.y += ef.speed * delta
+        ef.mesh.rotation.x += ef.speed * 0.3 * delta
+        ef.mesh.material.opacity = 0.03 + Math.sin(this.time * ef.pulse) * 0.015
+        ef.mesh.scale.setScalar(ef.baseScale + Math.sin(this.time * ef.pulse * 0.5) * 0.3)
+      }
+    }
+
+    // holographic pillars of light
+    if (this.holoBeams) {
+      for (const hb of this.holoBeams) {
+        hb.mesh.material.opacity = hb.baseOpacity + Math.sin(this.time * hb.speed + hb.phase) * 0.02
+        hb.mesh.scale.x = 1 + Math.sin(this.time * 2 + hb.phase) * 0.15
+        hb.mesh.scale.z = 1 + Math.cos(this.time * 2 + hb.phase) * 0.15
+      }
+    }
+
+    // ember / spark particles
+    if (this.embers) {
+      const epos = this.embers.geometry.attributes.position.array
+      for (let i = 0; i < epos.length; i += 3) {
+        epos[i + 1] += (0.8 + Math.sin(i) * 0.5) * delta
+        epos[i] += Math.sin(this.time + i * 0.1) * 0.02
+        if (epos[i + 1] > 20) epos[i + 1] = 0.5
+      }
+      this.embers.geometry.attributes.position.needsUpdate = true
+    }
+
+    // lightning flashes
+    if (this.lightningTimer !== undefined) {
+      this.lightningTimer -= delta
+      if (this.lightningTimer <= 0) {
+        this.lightningTimer = 3 + Math.random() * 8
+        if (this.lightningFlash) {
+          this.lightningFlash.intensity = 8 + Math.random() * 12
+          setTimeout(() => {
+            if (this.lightningFlash) this.lightningFlash.intensity = 0
+          }, 80 + Math.random() * 120)
+        }
+      }
     }
   }
 }

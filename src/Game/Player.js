@@ -23,6 +23,8 @@ export class Player {
     this.buildRider()
     this.buildHoverBike()
     this.setupTrails()
+    this.setupExhaust()
+    this.setupSpeedLines()
   }
 
   setupPhysics() {
@@ -514,6 +516,23 @@ export class Player {
       }
     }
 
+    // exhaust particles from thrusters
+    if (this.exhaustParticles) {
+      this.updateExhaust(delta, isMoving, isSprinting)
+    }
+
+    // speed lines when sprinting
+    if (this.speedLines) {
+      this.updateSpeedLines(delta, isMoving, isSprinting)
+    }
+
+    // sprint FOV + distortion
+    const rendering = this.game.rendering
+    const targetFov = isSprinting && isMoving ? 78 : 65
+    rendering.camera.fov += (targetFov - rendering.camera.fov) * Math.min(1, 4 * delta)
+    rendering.camera.updateProjectionMatrix()
+    rendering.setSprintDistortion(isSprinting && isMoving ? 1.0 : 0.0)
+
     // update trails
     this.updateTrails(isMoving)
   }
@@ -560,5 +579,151 @@ export class Player {
 
     updateTrailLine(this.trailLeft, 'left')
     updateTrailLine(this.trailRight, 'right')
+  }
+
+  setupExhaust() {
+    const exhaustCount = 80
+    const positions = new Float32Array(exhaustCount * 3)
+    const colors = new Float32Array(exhaustCount * 3)
+    const sizes = new Float32Array(exhaustCount)
+
+    for (let i = 0; i < exhaustCount; i++) {
+      positions[i * 3] = 0
+      positions[i * 3 + 1] = 0
+      positions[i * 3 + 2] = 0
+      colors[i * 3] = 0.48
+      colors[i * 3 + 1] = 0.18
+      colors[i * 3 + 2] = 0.97
+      sizes[i] = 0
+    }
+
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+
+    const mat = new THREE.PointsMaterial({
+      size: 0.15,
+      transparent: true,
+      opacity: 0.6,
+      vertexColors: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    })
+
+    this.exhaustParticles = new THREE.Points(geo, mat)
+    this.scene.add(this.exhaustParticles)
+    this.exhaustIndex = 0
+    this.exhaustCount = exhaustCount
+    this.exhaustVelocities = new Float32Array(exhaustCount * 3)
+    this.exhaustLife = new Float32Array(exhaustCount)
+  }
+
+  setupSpeedLines() {
+    const lineCount = 40
+    this.speedLines = []
+    const mat = new THREE.LineBasicMaterial({
+      color: 0x05d9e8,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+    })
+
+    for (let i = 0; i < lineCount; i++) {
+      const geo = new THREE.BufferGeometry()
+      const positions = new Float32Array(6)
+      geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+      const line = new THREE.Line(geo, mat.clone())
+      line.frustumCulled = false
+      this.scene.add(line)
+      this.speedLines.push({
+        line,
+        offset: { x: (Math.random() - 0.5) * 6, y: Math.random() * 4 + 1, z: (Math.random() - 0.5) * 6 },
+        length: 1 + Math.random() * 3,
+      })
+    }
+  }
+
+  updateExhaust(delta, isMoving, isSprinting) {
+    const pos = this.exhaustParticles.geometry.attributes.position.array
+    const col = this.exhaustParticles.geometry.attributes.color.array
+
+    // emit new particles from thrusters
+    if (isMoving) {
+      const emitCount = isSprinting ? 4 : 2
+      for (let e = 0; e < emitCount; e++) {
+        const i = this.exhaustIndex % this.exhaustCount
+        const sinR = Math.sin(this.rotation)
+        const cosR = Math.cos(this.rotation)
+        const side = (e % 2 === 0) ? -0.25 : 0.25
+
+        pos[i * 3] = this.position.x - sinR * 1.75 + cosR * side + (Math.random() - 0.5) * 0.1
+        pos[i * 3 + 1] = this.position.y + 0.35 + (Math.random() - 0.5) * 0.1
+        pos[i * 3 + 2] = this.position.z - cosR * 1.75 - sinR * side + (Math.random() - 0.5) * 0.1
+
+        this.exhaustVelocities[i * 3] = -sinR * (-3 - Math.random() * 2)
+        this.exhaustVelocities[i * 3 + 1] = (Math.random() - 0.3) * 0.5
+        this.exhaustVelocities[i * 3 + 2] = -cosR * (-3 - Math.random() * 2)
+
+        this.exhaustLife[i] = 1.0
+
+        if (isSprinting) {
+          col[i * 3] = 1
+          col[i * 3 + 1] = 0.16
+          col[i * 3 + 2] = 0.43
+        } else {
+          col[i * 3] = 0.48
+          col[i * 3 + 1] = 0.18
+          col[i * 3 + 2] = 0.97
+        }
+        this.exhaustIndex++
+      }
+    }
+
+    // update all particles
+    for (let i = 0; i < this.exhaustCount; i++) {
+      if (this.exhaustLife[i] > 0) {
+        pos[i * 3] += this.exhaustVelocities[i * 3] * delta
+        pos[i * 3 + 1] += this.exhaustVelocities[i * 3 + 1] * delta
+        pos[i * 3 + 2] += this.exhaustVelocities[i * 3 + 2] * delta
+        this.exhaustLife[i] -= delta * 2.5
+        if (this.exhaustLife[i] <= 0) {
+          pos[i * 3 + 1] = -100
+        }
+      }
+    }
+
+    this.exhaustParticles.geometry.attributes.position.needsUpdate = true
+    this.exhaustParticles.geometry.attributes.color.needsUpdate = true
+    this.exhaustParticles.material.opacity = isSprinting ? 0.8 : 0.5
+  }
+
+  updateSpeedLines(delta, isMoving, isSprinting) {
+    const targetOpacity = (isMoving && isSprinting) ? 0.3 : 0
+    const camera = this.game.rendering.camera
+
+    for (const sl of this.speedLines) {
+      const mat = sl.line.material
+      mat.opacity += (targetOpacity - mat.opacity) * Math.min(1, 5 * delta)
+
+      if (mat.opacity > 0.01) {
+        const posArr = sl.line.geometry.attributes.position.array
+        const cx = camera.position.x + sl.offset.x
+        const cy = camera.position.y + sl.offset.y
+        const cz = camera.position.z + sl.offset.z
+
+        const sinR = Math.sin(this.rotation)
+        const cosR = Math.cos(this.rotation)
+
+        posArr[0] = cx
+        posArr[1] = cy
+        posArr[2] = cz
+        posArr[3] = cx - sinR * sl.length
+        posArr[4] = cy
+        posArr[5] = cz - cosR * sl.length
+
+        sl.line.geometry.attributes.position.needsUpdate = true
+        mat.color.setHex(isSprinting ? 0xff2a6d : 0x05d9e8)
+      }
+    }
   }
 }
