@@ -51,52 +51,107 @@ export class World {
   }
 
   setupLighting() {
-    const ambient = new THREE.AmbientLight(0x0a0a12, 0.2)
+    // subtle ambient — keeps shadows deep
+    const ambient = new THREE.AmbientLight(0x060612, 0.15)
     this.scene.add(ambient)
 
-    const hemi = new THREE.HemisphereLight(0x7b2ff7, 0x0a0a12, 0.3)
+    // hemisphere: purple sky → dark ground fill
+    const hemi = new THREE.HemisphereLight(0x1a0a3e, 0x050510, 0.25)
     this.scene.add(hemi)
 
-    const mainLight = new THREE.DirectionalLight(0x7b2ff7, 0.3)
-    mainLight.position.set(-10, 25, 10)
-    mainLight.castShadow = true
-    mainLight.shadow.mapSize.set(2048, 2048)
-    mainLight.shadow.camera.near = 0.5
-    mainLight.shadow.camera.far = 100
-    mainLight.shadow.camera.left = -40
-    mainLight.shadow.camera.right = 40
-    mainLight.shadow.camera.top = 40
-    mainLight.shadow.camera.bottom = -40
-    this.scene.add(mainLight)
+    // key light — moonlight with purple tint, high angle
+    const key = new THREE.DirectionalLight(0x4422aa, 0.4)
+    key.position.set(-15, 30, 10)
+    key.castShadow = true
+    key.shadow.mapSize.set(2048, 2048)
+    key.shadow.camera.near = 1
+    key.shadow.camera.far = 80
+    key.shadow.camera.left = -35
+    key.shadow.camera.right = 35
+    key.shadow.camera.top = 35
+    key.shadow.camera.bottom = -35
+    key.shadow.bias = -0.0005
+    key.shadow.normalBias = 0.02
+    this.scene.add(key)
 
-    const colors = [0xff2a6d, 0x05d9e8, 0x7b2ff7, 0xff2a6d, 0x05d9e8, 0x7b2ff7, 0x00ff9f]
-    const positions = [
-      [5, 10, -5], [-8, 8, 3], [0, 12, -12],
-      [15, 6, 10], [-12, 14, -8], [8, 4, 15], [0, 3, 0]
+    // rim light — cool cyan backlight for edge separation
+    const rim = new THREE.DirectionalLight(0x05d9e8, 0.15)
+    rim.position.set(20, 15, -20)
+    this.scene.add(rim)
+
+    // practical neon lights — color pools on ground
+    const practicals = [
+      { pos: [-18, 6, -18], color: 0xff2a6d, i: 3, d: 20 },
+      { pos: [15, 8, -15], color: 0x05d9e8, i: 3.5, d: 22 },
+      { pos: [-12, 4, 14], color: 0x7b2ff7, i: 2.5, d: 18 },
+      { pos: [18, 5, 10], color: 0xff2a6d, i: 2, d: 16 },
+      { pos: [0, 3, -22], color: 0x00ff9f, i: 2.5, d: 18 },
+      { pos: [-22, 5, 0], color: 0x05d9e8, i: 2, d: 15 },
+      { pos: [0, 2, 0], color: 0x7b2ff7, i: 1.5, d: 12 },
     ]
-    for (let i = 0; i < colors.length; i++) {
-      const light = new THREE.PointLight(colors[i], 2.5, 35)
-      light.position.set(...positions[i])
+    for (const p of practicals) {
+      const light = new THREE.PointLight(p.color, p.i, p.d)
+      light.position.set(...p.pos)
+      light.decay = 2
       this.scene.add(light)
+    }
+
+    // low ground-level fill lights (puddle reflections)
+    for (const p of practicals.slice(0, 4)) {
+      const gndLight = new THREE.PointLight(p.color, 0.5, 8)
+      gndLight.position.set(p.pos[0], 0.3, p.pos[2])
+      gndLight.decay = 2
+      this.scene.add(gndLight)
     }
   }
 
   setupGround() {
-    const geo = new THREE.BoxGeometry(60, 0.5, 60)
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0x08081a,
-      metalness: 0.95,
-      roughness: 0.1,
+    // wet asphalt — MeshPhysicalMaterial for clearcoat reflections
+    const geo = new THREE.BoxGeometry(80, 0.5, 80)
+    const mat = new THREE.MeshPhysicalMaterial({
+      color: 0x0a0a18,
+      metalness: 0.1,
+      roughness: 0.15,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.08,
+      reflectivity: 0.9,
+      envMapIntensity: 1.2,
     })
     const ground = new THREE.Mesh(geo, mat)
     ground.position.y = -0.25
     ground.receiveShadow = true
     this.scene.add(ground)
 
+    // puddle patches — extra reflective spots
+    const puddleMat = new THREE.MeshPhysicalMaterial({
+      color: 0x080816,
+      metalness: 0.05,
+      roughness: 0.02,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.01,
+      reflectivity: 1.0,
+      transparent: true,
+      opacity: 0.85,
+    })
+    for (let i = 0; i < 12; i++) {
+      const size = 1.5 + Math.random() * 4
+      const puddle = new THREE.Mesh(
+        new THREE.CircleGeometry(size, 24),
+        puddleMat
+      )
+      puddle.rotation.x = -Math.PI / 2
+      puddle.position.set(
+        (Math.random() - 0.5) * 50,
+        0.01,
+        (Math.random() - 0.5) * 50
+      )
+      this.scene.add(puddle)
+    }
+
     if (this.physicsWorld) {
       const bodyDesc = this.rapier.RigidBodyDesc.fixed().setTranslation(0, -0.25, 0)
       const body = this.physicsWorld.createRigidBody(bodyDesc)
-      this.physicsWorld.createCollider(this.rapier.ColliderDesc.cuboid(30, 0.25, 30), body)
+      this.physicsWorld.createCollider(this.rapier.ColliderDesc.cuboid(40, 0.25, 40), body)
     }
 
     this.setupGrid()
@@ -160,10 +215,12 @@ export class World {
       { x: -15, z: -25, w: 8, h: 28, d: 5 },
     ]
 
-    const baseMat = new THREE.MeshStandardMaterial({
-      color: 0x0a0a1e,
-      metalness: 0.8,
-      roughness: 0.3,
+    const baseMat = new THREE.MeshPhysicalMaterial({
+      color: 0x08081a,
+      metalness: 0.3,
+      roughness: 0.7,
+      clearcoat: 0.3,
+      clearcoatRoughness: 0.4,
     })
 
     for (const b of data) {
@@ -194,10 +251,15 @@ export class World {
         for (let c = 0; c < cols; c++) {
           if (Math.random() > 0.55) continue
           const color = colors[Math.floor(Math.random() * colors.length)]
-          const mat = new THREE.MeshBasicMaterial({
-            color,
+          const intensity = 0.3 + Math.random() * 0.7
+
+          // emissive material — glows through bloom
+          const mat = new THREE.MeshStandardMaterial({
+            color: 0x000000,
+            emissive: color,
+            emissiveIntensity: intensity,
             transparent: true,
-            opacity: 0.3 + Math.random() * 0.5,
+            opacity: 0.85,
           })
           const win = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.9), mat)
           const yPos = b.h / 2 - 1 - b.h / 2 + 1.5 + r * 2.2
@@ -270,10 +332,13 @@ export class World {
   }
 
   addEdgeStrips(group, b) {
-    const stripMat = new THREE.MeshBasicMaterial({
-      color: Math.random() > 0.5 ? 0x05d9e8 : 0xff2a6d,
+    const col = Math.random() > 0.5 ? 0x05d9e8 : 0xff2a6d
+    const stripMat = new THREE.MeshStandardMaterial({
+      color: 0x000000,
+      emissive: col,
+      emissiveIntensity: 1.5,
       transparent: true,
-      opacity: 0.4,
+      opacity: 0.7,
     })
 
     const edges = [
@@ -298,25 +363,44 @@ export class World {
       { points: [[5, 6, -20], [10, 8, -15], [15, 5, -10]], color: 0x05d9e8 },
       { points: [[-15, 2, 5], [-8, 4, 8], [0, 3, 12]], color: 0x7b2ff7 },
       { points: [[10, 7, 5], [15, 5, 10], [20, 8, 15]], color: 0x00ff9f },
+      { points: [[-24, 4, -5], [-20, 6, -15], [-16, 3, -20]], color: 0xff2a6d },
+      { points: [[20, 3, 5], [22, 5, -2], [18, 7, -8]], color: 0x05d9e8 },
     ]
 
     for (const tube of tubes) {
       const curve = new THREE.CatmullRomCurve3(
         tube.points.map(p => new THREE.Vector3(...p))
       )
-      const geo = new THREE.TubeGeometry(curve, 32, 0.04, 8, false)
-      const mat = new THREE.MeshBasicMaterial({
+
+      // core tube — bright emissive
+      const coreGeo = new THREE.TubeGeometry(curve, 40, 0.03, 8, false)
+      const coreMat = new THREE.MeshStandardMaterial({
+        color: 0x000000,
+        emissive: tube.color,
+        emissiveIntensity: 2.5,
+      })
+      this.scene.add(new THREE.Mesh(coreGeo, coreMat))
+
+      // outer glow shell — larger, transparent
+      const glowGeo = new THREE.TubeGeometry(curve, 40, 0.12, 8, false)
+      const glowMat = new THREE.MeshBasicMaterial({
         color: tube.color,
         transparent: true,
-        opacity: 0.8,
+        opacity: 0.08,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
       })
-      const mesh = new THREE.Mesh(geo, mat)
-      this.scene.add(mesh)
+      this.scene.add(new THREE.Mesh(glowGeo, glowMat))
 
-      const light = new THREE.PointLight(tube.color, 1, 15)
-      const mid = curve.getPoint(0.5)
-      light.position.copy(mid)
-      this.scene.add(light)
+      // light sources along the tube
+      for (let t = 0; t <= 1; t += 0.5) {
+        const p = curve.getPoint(t)
+        const light = new THREE.PointLight(tube.color, 1.5, 12)
+        light.position.copy(p)
+        light.decay = 2
+        this.scene.add(light)
+      }
     }
   }
 
@@ -435,29 +519,41 @@ export class World {
   }
 
   setupRain() {
-    const count = 3000
-    const positions = new Float32Array(count * 3)
+    // rain streaks — line segments for cinematic rain
+    const count = 2000
+    const positions = new Float32Array(count * 6) // 2 verts per streak
     const velocities = new Float32Array(count)
+
     for (let i = 0; i < count; i++) {
-      positions[i * 3] = (Math.random() - 0.5) * 80
-      positions[i * 3 + 1] = Math.random() * 50
-      positions[i * 3 + 2] = (Math.random() - 0.5) * 80
-      velocities[i] = 12 + Math.random() * 8
+      const x = (Math.random() - 0.5) * 70
+      const y = Math.random() * 50
+      const z = (Math.random() - 0.5) * 70
+      const streakLen = 0.3 + Math.random() * 0.5
+
+      positions[i * 6] = x
+      positions[i * 6 + 1] = y
+      positions[i * 6 + 2] = z
+      positions[i * 6 + 3] = x + (Math.random() - 0.5) * 0.02
+      positions[i * 6 + 4] = y + streakLen
+      positions[i * 6 + 5] = z + (Math.random() - 0.5) * 0.02
+
+      velocities[i] = 15 + Math.random() * 10
     }
 
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
 
-    const mat = new THREE.PointsMaterial({
-      color: 0x05d9e8,
-      size: 0.04,
+    const mat = new THREE.LineBasicMaterial({
+      color: 0x8ecfff,
       transparent: true,
-      opacity: 0.3,
+      opacity: 0.12,
       depthWrite: false,
+      blending: THREE.AdditiveBlending,
     })
 
-    this.rain = new THREE.Points(geo, mat)
+    this.rain = new THREE.LineSegments(geo, mat)
     this.rainVelocities = velocities
+    this.rainCount = count
     this.scene.add(this.rain)
   }
 
@@ -572,19 +668,21 @@ export class World {
   }
 
   setupDistantCity() {
-    const mat = new THREE.MeshBasicMaterial({
-      color: 0x060612,
-      transparent: true,
-      opacity: 0.8,
+    const mat = new THREE.MeshPhysicalMaterial({
+      color: 0x050510,
+      metalness: 0.4,
+      roughness: 0.8,
+      clearcoat: 0.2,
+      clearcoatRoughness: 0.5,
     })
 
     const windowColors = [0x05d9e8, 0xff2a6d, 0x7b2ff7]
 
-    for (let i = 0; i < 40; i++) {
-      const angle = (i / 40) * Math.PI * 2
-      const dist = 50 + Math.random() * 30
+    for (let i = 0; i < 50; i++) {
+      const angle = (i / 50) * Math.PI * 2
+      const dist = 50 + Math.random() * 35
       const w = 3 + Math.random() * 6
-      const h = 15 + Math.random() * 45
+      const h = 15 + Math.random() * 50
       const d = 3 + Math.random() * 5
 
       const geo = new THREE.BoxGeometry(w, h, d)
@@ -597,12 +695,15 @@ export class World {
       building.rotation.y = Math.random() * Math.PI
       this.scene.add(building)
 
-      const winCount = Math.floor(Math.random() * 15) + 5
+      const winCount = Math.floor(Math.random() * 20) + 5
       for (let j = 0; j < winCount; j++) {
-        const winMat = new THREE.MeshBasicMaterial({
-          color: windowColors[Math.floor(Math.random() * 3)],
+        const wc = windowColors[Math.floor(Math.random() * 3)]
+        const winMat = new THREE.MeshStandardMaterial({
+          color: 0x000000,
+          emissive: wc,
+          emissiveIntensity: 0.4 + Math.random() * 0.6,
           transparent: true,
-          opacity: 0.2 + Math.random() * 0.3,
+          opacity: 0.7,
         })
         const win = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.7), winMat)
         const wy = -h / 2 + 2 + Math.random() * (h - 4)
@@ -1066,30 +1167,118 @@ export class World {
   }
 
   setupSkybox() {
-    const geo = new THREE.SphereGeometry(100, 32, 32)
-    const mat = new THREE.MeshBasicMaterial({
-      color: 0x030308,
+    // gradient sky shader — dark horizon fading to deep purple/blue zenith
+    const skyGeo = new THREE.SphereGeometry(120, 32, 32)
+    const skyMat = new THREE.ShaderMaterial({
       side: THREE.BackSide,
+      depthWrite: false,
+      uniforms: {
+        topColor: { value: new THREE.Color(0x0a0020) },
+        midColor: { value: new THREE.Color(0x140828) },
+        bottomColor: { value: new THREE.Color(0x050510) },
+        offset: { value: 10 },
+        exponent: { value: 0.5 },
+      },
+      vertexShader: `
+        varying vec3 vWorldPosition;
+        void main() {
+          vec4 worldPos = modelMatrix * vec4(position, 1.0);
+          vWorldPosition = worldPos.xyz;
+          gl_Position = projectionMatrix * viewMatrix * worldPos;
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 topColor;
+        uniform vec3 midColor;
+        uniform vec3 bottomColor;
+        uniform float offset;
+        uniform float exponent;
+        varying vec3 vWorldPosition;
+        void main() {
+          float h = normalize(vWorldPosition + offset).y;
+          float t = max(pow(max(h, 0.0), exponent), 0.0);
+          vec3 sky = mix(bottomColor, midColor, smoothstep(0.0, 0.3, t));
+          sky = mix(sky, topColor, smoothstep(0.3, 1.0, t));
+          gl_FragColor = vec4(sky, 1.0);
+        }
+      `,
     })
-    this.scene.add(new THREE.Mesh(geo, mat))
+    this.scene.add(new THREE.Mesh(skyGeo, skyMat))
 
-    const starCount = 300
+    // distant cloud layer — subtle scrolling haze
+    const cloudGeo = new THREE.PlaneGeometry(300, 300)
+    const cloudMat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      uniforms: {
+        time: { value: 0 },
+        color: { value: new THREE.Color(0x1a0a3e) },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float time;
+        uniform vec3 color;
+        varying vec2 vUv;
+        float hash(vec2 p) {
+          return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+        }
+        float noise(vec2 p) {
+          vec2 i = floor(p);
+          vec2 f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          float a = hash(i);
+          float b = hash(i + vec2(1.0, 0.0));
+          float c = hash(i + vec2(0.0, 1.0));
+          float d = hash(i + vec2(1.0, 1.0));
+          return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+        }
+        void main() {
+          vec2 uv = vUv * 3.0 + vec2(time * 0.01, 0.0);
+          float n = noise(uv) * 0.5 + noise(uv * 2.0) * 0.3 + noise(uv * 4.0) * 0.2;
+          float alpha = smoothstep(0.35, 0.7, n) * 0.06;
+          gl_FragColor = vec4(color, alpha);
+        }
+      `,
+    })
+    this.cloudPlane = new THREE.Mesh(cloudGeo, cloudMat)
+    this.cloudPlane.rotation.x = -Math.PI / 2
+    this.cloudPlane.position.y = 55
+    this.scene.add(this.cloudPlane)
+
+    // stars — finer, more varied
+    const starCount = 500
     const starPositions = new Float32Array(starCount * 3)
+    const starColors = new Float32Array(starCount * 3)
     for (let i = 0; i < starCount; i++) {
       const theta = Math.random() * Math.PI * 2
-      const phi = Math.random() * Math.PI * 0.4
-      const r = 90
+      const phi = Math.random() * Math.PI * 0.35
+      const r = 95
       starPositions[i * 3] = r * Math.sin(phi) * Math.cos(theta)
       starPositions[i * 3 + 1] = r * Math.cos(phi)
       starPositions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta)
+
+      const warmth = Math.random()
+      starColors[i * 3] = 0.7 + warmth * 0.3
+      starColors[i * 3 + 1] = 0.7 + warmth * 0.2
+      starColors[i * 3 + 2] = 0.9 + warmth * 0.1
     }
     const starGeo = new THREE.BufferGeometry()
     starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3))
+    starGeo.setAttribute('color', new THREE.BufferAttribute(starColors, 3))
     const starMat = new THREE.PointsMaterial({
-      color: 0xffffff,
-      size: 0.3,
+      size: 0.2,
       transparent: true,
-      opacity: 0.4,
+      opacity: 0.5,
+      vertexColors: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
     })
     this.scene.add(new THREE.Points(starGeo, starMat))
   }
@@ -1099,9 +1288,16 @@ export class World {
 
     if (this.rain) {
       const pos = this.rain.geometry.attributes.position.array
-      for (let i = 0; i < pos.length / 3; i++) {
-        pos[i * 3 + 1] -= this.rainVelocities[i] * delta
-        if (pos[i * 3 + 1] < -1) pos[i * 3 + 1] = 50
+      for (let i = 0; i < this.rainCount; i++) {
+        const fall = this.rainVelocities[i] * delta
+        pos[i * 6 + 1] -= fall
+        pos[i * 6 + 4] -= fall
+        if (pos[i * 6 + 1] < -1) {
+          const resetY = 50
+          const streakLen = pos[i * 6 + 4] - pos[i * 6 + 1]
+          pos[i * 6 + 1] = resetY
+          pos[i * 6 + 4] = resetY + streakLen
+        }
       }
       this.rain.geometry.attributes.position.needsUpdate = true
     }
@@ -1261,6 +1457,11 @@ export class World {
         if (epos[i + 1] > 20) epos[i + 1] = 0.5
       }
       this.embers.geometry.attributes.position.needsUpdate = true
+    }
+
+    // cloud scroll
+    if (this.cloudPlane) {
+      this.cloudPlane.material.uniforms.time.value = this.time
     }
 
     // lightning flashes

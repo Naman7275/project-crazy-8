@@ -45,15 +45,19 @@ export class Player {
   buildRider() {
     this.rider = new THREE.Group()
 
-    const bodyMat = new THREE.MeshStandardMaterial({
+    const bodyMat = new THREE.MeshPhysicalMaterial({
       color: 0x1a1a2e,
-      metalness: 0.7,
-      roughness: 0.3,
+      metalness: 0.5,
+      roughness: 0.4,
+      clearcoat: 0.3,
+      clearcoatRoughness: 0.3,
     })
-    const jacketMat = new THREE.MeshStandardMaterial({
+    const jacketMat = new THREE.MeshPhysicalMaterial({
       color: 0x0d0d1a,
-      metalness: 0.8,
-      roughness: 0.2,
+      metalness: 0.6,
+      roughness: 0.25,
+      clearcoat: 0.5,
+      clearcoatRoughness: 0.15,
     })
 
     // torso — jacket
@@ -71,8 +75,8 @@ export class Player {
     collar.position.set(0, 2.25, 0)
     this.rider.add(collar)
 
-    // neon strips on jacket
-    const stripMat = new THREE.MeshBasicMaterial({ color: 0xff2a6d })
+    // neon strips on jacket — emissive for bloom glow
+    const stripMat = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xff2a6d, emissiveIntensity: 2.0 })
     const stripGeo = new THREE.BoxGeometry(0.04, 0.6, 0.04)
     for (const xOff of [-0.32, 0.32]) {
       const strip = new THREE.Mesh(stripGeo, stripMat)
@@ -83,16 +87,19 @@ export class Player {
     // jacket back neon accent
     const backStrip = new THREE.Mesh(
       new THREE.BoxGeometry(0.5, 0.04, 0.04),
-      new THREE.MeshBasicMaterial({ color: 0x05d9e8 })
+      new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0x05d9e8, emissiveIntensity: 2.0 })
     )
     backStrip.position.set(0, 1.6, -0.21)
     this.rider.add(backStrip)
 
-    // helmet
-    const helmetMat = new THREE.MeshStandardMaterial({
-      color: 0x111122,
-      metalness: 0.95,
-      roughness: 0.1,
+    // helmet — glossy clearcoat
+    const helmetMat = new THREE.MeshPhysicalMaterial({
+      color: 0x0a0a1e,
+      metalness: 0.7,
+      roughness: 0.05,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.02,
+      reflectivity: 0.9,
     })
     const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 16), helmetMat)
     helmet.scale.set(1, 1.1, 1.05)
@@ -100,9 +107,11 @@ export class Player {
     helmet.castShadow = true
     this.rider.add(helmet)
 
-    // visor — wide glowing strip
-    const visorMat = new THREE.MeshBasicMaterial({
-      color: 0xff2a6d,
+    // visor — emissive for bloom bleed
+    const visorMat = new THREE.MeshStandardMaterial({
+      color: 0x000000,
+      emissive: 0xff2a6d,
+      emissiveIntensity: 3.0,
       transparent: true,
       opacity: 0.9,
     })
@@ -140,7 +149,7 @@ export class Player {
       // cyber arm strip
       const armStrip = new THREE.Mesh(
         new THREE.BoxGeometry(0.03, 0.4, 0.03),
-        new THREE.MeshBasicMaterial({ color: 0x05d9e8 })
+        new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0x05d9e8, emissiveIntensity: 2.0 })
       )
       armStrip.position.copy(forearm.position)
       armStrip.rotation.copy(forearm.rotation)
@@ -176,10 +185,12 @@ export class Player {
       // knee guard neon
       const kneeGuard = new THREE.Mesh(
         new THREE.BoxGeometry(0.12, 0.08, 0.12),
-        new THREE.MeshBasicMaterial({
-          color: side > 0 ? 0x05d9e8 : 0xff2a6d,
+        new THREE.MeshStandardMaterial({
+          color: 0x000000,
+          emissive: side > 0 ? 0x05d9e8 : 0xff2a6d,
+          emissiveIntensity: 1.8,
           transparent: true,
-          opacity: 0.7,
+          opacity: 0.85,
         })
       )
       kneeGuard.position.set(side * 0.22, 0.95, 0.2)
@@ -200,10 +211,13 @@ export class Player {
   buildHoverBike() {
     this.bike = new THREE.Group()
 
-    const frameMat = new THREE.MeshStandardMaterial({
-      color: 0x0d0d1a,
-      metalness: 0.9,
-      roughness: 0.15,
+    const frameMat = new THREE.MeshPhysicalMaterial({
+      color: 0x0a0a18,
+      metalness: 0.7,
+      roughness: 0.1,
+      clearcoat: 0.8,
+      clearcoatRoughness: 0.05,
+      reflectivity: 0.8,
     })
 
     // main body — sleek elongated shape
@@ -243,20 +257,20 @@ export class Player {
     for (const side of [-1, 1]) {
       const grip = new THREE.Mesh(
         new THREE.CylinderGeometry(0.05, 0.05, 0.12, 8),
-        new THREE.MeshBasicMaterial({ color: 0xff2a6d })
+        new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xff2a6d, emissiveIntensity: 2.0 })
       )
       grip.rotation.z = Math.PI / 2
       grip.position.set(side * 0.45, 0.75, 0.9)
       this.bike.add(grip)
     }
 
-    // neon underglow strips
+    // neon underglow strips — emissive for bloom
     const underglowColors = [0x05d9e8, 0xff2a6d]
     for (let i = 0; i < 2; i++) {
       const side = i === 0 ? -1 : 1
       const glowStrip = new THREE.Mesh(
         new THREE.BoxGeometry(0.04, 0.04, 2.2),
-        new THREE.MeshBasicMaterial({ color: underglowColors[i] })
+        new THREE.MeshStandardMaterial({ color: 0x000000, emissive: underglowColors[i], emissiveIntensity: 2.5 })
       )
       glowStrip.position.set(side * 0.38, 0.2, 0)
       this.bike.add(glowStrip)
@@ -288,14 +302,14 @@ export class Player {
 
     // headlight visual
     const headlightGeo = new THREE.CircleGeometry(0.12, 16)
-    const headlightMat = new THREE.MeshBasicMaterial({ color: 0x05d9e8 })
+    const headlightMat = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0x05d9e8, emissiveIntensity: 3.0 })
     const headlightMesh = new THREE.Mesh(headlightGeo, headlightMat)
     headlightMesh.position.set(0, 0.5, 1.81)
     this.bike.add(headlightMesh)
 
     // taillight
     const tailGeo = new THREE.BoxGeometry(0.5, 0.06, 0.04)
-    const tailMat = new THREE.MeshBasicMaterial({ color: 0xff2a6d })
+    const tailMat = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xff2a6d, emissiveIntensity: 2.5 })
     const taillight = new THREE.Mesh(tailGeo, tailMat)
     taillight.position.set(0, 0.4, -1.7)
     this.bike.add(taillight)
@@ -348,10 +362,12 @@ export class Player {
     for (const side of [-1, 1]) {
       const panel = new THREE.Mesh(
         new THREE.BoxGeometry(0.04, 0.2, 1.5),
-        new THREE.MeshStandardMaterial({
-          color: 0x111122,
-          metalness: 0.9,
-          roughness: 0.1,
+        new THREE.MeshPhysicalMaterial({
+          color: 0x0a0a1e,
+          metalness: 0.6,
+          roughness: 0.15,
+          clearcoat: 0.5,
+          clearcoatRoughness: 0.1,
         })
       )
       panel.position.set(side * 0.42, 0.4, -0.1)
@@ -359,8 +375,10 @@ export class Player {
 
       const panelAccent = new THREE.Mesh(
         new THREE.BoxGeometry(0.02, 0.04, 1.0),
-        new THREE.MeshBasicMaterial({
-          color: side > 0 ? 0x05d9e8 : 0xff2a6d,
+        new THREE.MeshStandardMaterial({
+          color: 0x000000,
+          emissive: side > 0 ? 0x05d9e8 : 0xff2a6d,
+          emissiveIntensity: 2.0,
         })
       )
       panelAccent.position.set(side * 0.44, 0.45, -0.1)
@@ -497,9 +515,9 @@ export class Player {
         this.bikeLight.color.setHex(isSprinting ? 0xff2a6d : 0x05d9e8)
       }
 
-      // taillight brightness
+      // taillight brightness — brake glow
       if (this.taillight) {
-        this.taillight.material.opacity = isMoving ? 0.6 : 1.0
+        this.taillight.material.emissiveIntensity = isMoving ? 1.5 : 3.0
       }
     }
 
@@ -509,10 +527,10 @@ export class Player {
       this.rider.rotation.y = this.rotation
       this.rider.rotation.z = this.lean * 0.2
 
-      // visor flicker
+      // visor flicker — pulse emissive for bloom flicker
       if (this.visor) {
-        const flicker = Math.sin(this.time * 30) > 0.95 ? 0.4 : 0.9
-        this.visor.material.opacity = flicker
+        const flicker = Math.sin(this.time * 30) > 0.95 ? 1.0 : 3.0
+        this.visor.material.emissiveIntensity = flicker
       }
     }
 
@@ -528,7 +546,7 @@ export class Player {
 
     // sprint FOV + distortion
     const rendering = this.game.rendering
-    const targetFov = isSprinting && isMoving ? 78 : 65
+    const targetFov = isSprinting && isMoving ? 74 : 60
     rendering.camera.fov += (targetFov - rendering.camera.fov) * Math.min(1, 4 * delta)
     rendering.camera.updateProjectionMatrix()
     rendering.setSprintDistortion(isSprinting && isMoving ? 1.0 : 0.0)
